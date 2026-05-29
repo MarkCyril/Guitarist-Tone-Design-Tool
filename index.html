@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guitar Tone Circuit Builder — Interactive Passive Tone Simulator</title>
+<meta name="description" content="Build a passive guitar tone circuit in your browser. Add, remove and swap resistors, capacitors and inductors and watch the frequency response change in real time.">
+<meta name="author" content="Mark">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Guitar Tone Circuit Builder">
+<meta property="og:description" content="Interactive passive guitar tone circuit simulator — drag sliders, add/remove R, L and C, and see the frequency response live.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Guitar Tone Circuit Builder">
+<meta name="twitter:description" content="Interactive passive guitar tone circuit simulator — build the circuit, see the tone.">
+<meta name="theme-color" content="#13161c">
+<style>
+  :root{--bg:#13161c;--panel:#1c2129;--panel2:#232a34;--line:#2f3744;--txt:#e6e9ef;
+    --muted:#97a0b0;--accent:#ffb347;--cap:#4fc3f7;--ind:#b18bff;--res:#ffb347;--fixed:#7e8aa0;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--txt);line-height:1.45}
+  header{padding:20px 26px 6px}
+  h1{margin:0;font-size:21px}
+  header p{margin:6px 0 0;color:var(--muted);font-size:13.5px;max-width:860px}
+  .wrap{display:flex;flex-wrap:wrap;gap:18px;padding:16px 26px 40px}
+  .col{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .left{flex:1 1 360px;min-width:330px;max-height:88vh;overflow:auto}
+  .right{flex:2 1 560px;min-width:360px;display:flex;flex-direction:column;gap:18px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--cap);margin:0 0 12px}
+  canvas,svg{width:100%;height:auto;display:block;background:var(--panel2);border-radius:8px}
+  .branch{border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:11px;background:var(--panel2)}
+  .branch.src{border-color:#4a5568}
+  .bhead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .bhead input.bname{flex:1;background:transparent;border:none;border-bottom:1px solid var(--line);color:var(--txt);font-size:13px;font-weight:600;padding:2px 0}
+  .bhead .tag{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .comp{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .comp select,.comp input{background:#171b22;border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px;font-size:12.5px}
+  .comp select.ty{width:104px}
+  .comp input.val{width:62px;text-align:right}
+  .comp select.un{width:62px}
+  .icon{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:6px;width:26px;height:28px;cursor:pointer;font-size:14px;line-height:1}
+  .icon:hover{border-color:#e06666;color:#e06666}
+  .addc{background:transparent;border:1px dashed var(--line);color:var(--muted);border-radius:6px;padding:5px 8px;font-size:11.5px;cursor:pointer;width:100%}
+  .addc:hover{border-color:var(--accent);color:var(--accent)}
+  .topbtns{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .topbtns button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);padding:7px 11px;border-radius:7px;font-size:12px;cursor:pointer}
+  .topbtns button:hover{border-color:var(--accent);color:var(--accent)}
+  .topbtns .prim{border-color:var(--accent);color:var(--accent)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:14px;height:3px;border-radius:2px;display:inline-block}
+  .readout{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;font-size:13px}
+  .readout div b{color:var(--cap)}
+  footer{color:var(--muted);font-size:12px;padding:0 26px 30px;max-width:880px}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+  .wireS{stroke:#7e8aa0;stroke-width:2;fill:none}
+  .gly{fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .lbl{fill:#cbd2dd;font:600 11px sans-serif}
+  .vlb{font:600 11px sans-serif}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎸 Guitar Tone Circuit Builder</h1>
+  <p>A full editor now. <b>Add</b> or <b>remove</b> parallel branches to ground, add or delete components
+  inside any branch (e.g. drop an inductor <i>in series</i> with a capacitor), and use each component's
+  type menu to <b>swap</b> R ↔ L ↔ C. The schematic and the frequency response rebuild instantly from
+  whatever you assemble. Dashed grey is your saved reference curve.</p>
+</header>
+
+<div class="wrap">
+  <div class="col left">
+    <div class="topbtns">
+      <button class="prim" id="addBranch">+ Add branch to ground</button>
+      <button id="setRef">Set reference ↦</button>
+      <button id="reset">Reset</button>
+    </div>
+    <div id="controls"></div>
+  </div>
+
+  <div class="right">
+    <div class="col">
+      <h2>Live Schematic</h2>
+      <svg id="sch" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--res)"></i> Resistor</span>
+        <span><i class="sw" style="background:var(--ind)"></i> Inductor</span>
+        <span><i class="sw" style="background:var(--cap)"></i> Capacitor</span>
+        <span><i class="sw" style="background:var(--fixed)"></i> Amp load (fixed)</span>
+      </div>
+    </div>
+    <div class="col">
+      <h2>Frequency Response</h2>
+      <canvas id="plot" width="900" height="420"></canvas>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--accent)"></i> Live</span>
+        <span><i class="sw" style="background:#6b7686"></i> Reference</span>
+        <span><i class="sw" style="background:var(--cap)"></i> Resonant peak</span>
+      </div>
+      <div class="readout">
+        <div>Resonant frequency: <b id="rFreq">–</b></div>
+        <div>Peak gain: <b id="rPeak">–</b></div>
+        <div>–3 dB roll-off: <b id="rCut">–</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Model: the source branch is the pickup (series components); every other branch is a parallel path to
+  ground. Impedances are summed in series within a branch, branches combine as parallel admittances, and
+  the output is the divider H(f)=Z<sub>shunt</sub>/(Z<sub>series</sub>+Z<sub>shunt</sub>), plotted as
+  magnitude in dB. R = real, L = jωL, C = 1/jωC. A lumped approximation for intuition, not SPICE-exact.
+</footer>
+
+<script>
+// ---------------- complex ----------------
+const cx=(re,im)=>({re,im});
+const cadd=(a,b)=>cx(a.re+b.re,a.im+b.im);
+const cmul=(a,b)=>cx(a.re*b.re-a.im*b.im,a.re*b.im+a.im*b.re);
+const cdiv=(a,b)=>{const d=b.re*b.re+b.im*b.im||1e-30;return cx((a.re*b.re+a.im*b.im)/d,(a.im*b.re-a.re*b.im)/d);};
+const cabs=a=>Math.hypot(a.re,a.im);
+const cinv=a=>cdiv(cx(1,0),a);
+
+// ---------------- units ----------------
+const UNIT={R:{'Ω':1,'kΩ':1e3,'MΩ':1e6},L:{'H':1,'mH':1e-3,'µH':1e-6},
+            C:{'F':1,'mF':1e-3,'µF':1e-6,'nF':1e-9,'pF':1e-12}};
+const DEF={R:{value:100,unit:'kΩ'},L:{value:2,unit:'H'},C:{value:22,unit:'nF'}};
+const COL={R:'#ffb347',L:'#b18bff',C:'#4fc3f7'};
+const base=c=>c.value*UNIT[c.type][c.unit];
+
+function Zc(c,w){const b=base(c);
+  if(c.type==='R')return cx(b,0);
+  if(c.type==='L')return cx(0,w*b);
+  return cx(0,-1/(w*b||1e-30)); }   // C
+
+// ---------------- state ----------------
+function defState(){return{
+  source:[{type:'R',value:6.5,unit:'kΩ'},{type:'L',value:2.5,unit:'H'}],
+  legs:[
+    {name:'Pickup self-cap',comps:[{type:'C',value:100,unit:'pF'}]},
+    {name:'Volume pot',comps:[{type:'R',value:250,unit:'kΩ'}]},
+    {name:'Tone control',comps:[{type:'C',value:22,unit:'nF'},{type:'R',value:500,unit:'kΩ'}]},
+    {name:'Cable cap',comps:[{type:'C',value:500,unit:'pF'}]},
+    {name:'Amp input',fixed:true,comps:[{type:'R',value:1,unit:'MΩ'}]}
+  ]};}
+let state=defState();
+
+// ---------------- transfer function ----------------
+function Zseries(comps,w){let z=cx(0,0);comps.forEach(c=>z=cadd(z,Zc(c,w)));return z;}
+function H(f){const w=2*Math.PI*f;
+  const Zs=Zseries(state.source,w);
+  let Y=cx(0,0),any=false;
+  state.legs.forEach(lg=>{if(lg.comps.length){any=true;Y=cadd(Y,cinv(Zseries(lg.comps,w)));}});
+  if(!any)return cx(1,0);
+  const Zsh=cinv(Y);
+  return cdiv(Zsh,cadd(Zs,Zsh));}
+
+const fmin=20,fmax=20000,N=400,fAxis=[];
+for(let i=0;i<N;i++)fAxis.push(fmin*Math.pow(fmax/fmin,i/(N-1)));
+const curveNow=()=>fAxis.map(f=>20*Math.log10(cabs(H(f))+1e-12));
+let refCurve=null;
+
+// ---------------- controls ----------------
+const controls=document.getElementById('controls');
+function compRow(li,ci,c){
+  const unitOpts=Object.keys(UNIT[c.type]).map(u=>`<option ${u===c.unit?'selected':''}>${u}</option>`).join('');
+  return `<div class="comp" data-li="${li}" data-ci="${ci}">
+    <select class="ty" data-f="type">
+      <option value="R" ${c.type==='R'?'selected':''}>Resistor (R)</option>
+      <option value="L" ${c.type==='L'?'selected':''}>Inductor (L)</option>
+      <option value="C" ${c.type==='C'?'selected':''}>Capacitor (C)</option>
+    </select>
+    <input class="val" type="number" step="any" data-f="value" value="${c.value}">
+    <select class="un" data-f="unit">${unitOpts}</select>
+    <button class="icon" data-act="delcomp" title="Remove component">✕</button>
+  </div>`;
+}
+function branchCard(lg,li,isSrc){
+  const rows=lg.comps.map((c,ci)=>compRow(li,ci,c)).join('');
+  const tag=isSrc?'<span class="tag">series · pickup</span>':(lg.fixed?'<span class="tag">fixed</span>':'<span class="tag">to ground</span>');
+  const del=(isSrc||lg.fixed)?'':`<button class="icon" data-act="delbranch" data-li="${li}" title="Remove branch">🗑</button>`;
+  const name=isSrc?'Source branch (pickup)':lg.name;
+  const nameEl=isSrc?`<span class="bname" style="flex:1;font-weight:600;font-size:13px">${name}</span>`
+    :`<input class="bname" data-li="${li}" data-f="name" value="${name}">`;
+  const addc=lg.fixed?'':`<button class="addc" data-act="addcomp" data-li="${li}">+ add series component</button>`;
+  return `<div class="branch ${isSrc?'src':''}"><div class="bhead">${nameEl}${tag}${del}</div>${rows}${addc}</div>`;
+}
+function render(){
+  let html=branchCard({comps:state.source},'src',true);
+  state.legs.forEach((lg,li)=>html+=branchCard(lg,li,false));
+  controls.innerHTML=html;
+  drawAll();
+}
+const listOf=li=>li==='src'?state.source:state.legs[li].comps;
+
+controls.addEventListener('input',e=>{
+  const f=e.target.dataset.f;if(!f)return;
+  const row=e.target.closest('.comp');
+  if(f==='name'){state.legs[+e.target.dataset.li].name=e.target.value;drawSchematic();return;}
+  if(!row)return;
+  const li=row.dataset.li==='src'?'src':+row.dataset.li, ci=+row.dataset.ci, c=listOf(li)[ci];
+  if(f==='value'){c.value=parseFloat(e.target.value)||0;drawAll();}
+});
+controls.addEventListener('change',e=>{
+  const f=e.target.dataset.f;if(!f)return;
+  const row=e.target.closest('.comp');if(!row)return;
+  const li=row.dataset.li==='src'?'src':+row.dataset.li, ci=+row.dataset.ci, c=listOf(li)[ci];
+  if(f==='type'){c.type=e.target.value;c.value=DEF[c.type].value;c.unit=DEF[c.type].unit;render();}
+  else if(f==='unit'){c.unit=e.target.value;drawAll();}
+});
+controls.addEventListener('click',e=>{
+  const act=e.target.dataset.act;if(!act)return;
+  if(act==='addcomp'){
+    const li=e.target.dataset.li==='src'?'src':+e.target.dataset.li;
+    listOf(li).push({type:'C',value:22,unit:'nF'});render();}
+  else if(act==='delcomp'){const row=e.target.closest('.comp');
+    const li=row.dataset.li==='src'?'src':+row.dataset.li;listOf(li).splice(+row.dataset.ci,1);render();}
+  else if(act==='delbranch'){state.legs.splice(+e.target.dataset.li,1);render();}
+});
+document.getElementById('addBranch').onclick=()=>{state.legs.splice(state.legs.length-1,0,
+  {name:'New branch',comps:[{type:'C',value:22,unit:'nF'}]});render();};
+document.getElementById('reset').onclick=()=>{state=defState();refCurve=null;render();setRef();};
+document.getElementById('setRef').onclick=()=>setRef();
+function setRef(){refCurve=curveNow();drawPlot();}
+
+// ---------------- schematic ----------------
+const sch=document.getElementById('sch');
+const TOP=90,BOT=300;
+function glyphV(x,cy,c){ // returns svg for component centered at (x,cy), extents 15
+  const col=COL[c.type];
+  if(c.type==='R')return `<rect class="gly" x="${x-9}" y="${cy-15}" width="18" height="30" stroke="${col}" stroke-width="2"/>`;
+  if(c.type==='L'){let d=`M${x},${cy-15}`;for(let k=0;k<3;k++)d+=` a6 6 0 0 1 0 10`;
+    return `<path class="gly" d="${d}" stroke="${col}" stroke-width="2"/>`;}
+  // C
+  return `<line class="gly" x1="${x-11}" y1="${cy-4}" x2="${x+11}" y2="${cy-4}" stroke="${col}" stroke-width="2.4"/>
+          <line class="gly" x1="${x-11}" y1="${cy+4}" x2="${x+11}" y2="${cy+4}" stroke="${col}" stroke-width="2.4"/>`;
+}
+function fmtVal(c){return `${(+c.value)} ${c.unit}`;}
+function legSVG(comps,x){ // vertical leg from TOP to BOT
+  if(!comps.length)return `<line class="wireS" x1="${x}" y1="${TOP}" x2="${x}" y2="${BOT}"/>`;
+  let svg='',prevBot=TOP;const slot=(BOT-TOP)/comps.length;
+  comps.forEach((c,i)=>{const cy=TOP+slot*(i+0.5);const gTop=cy-15,gBot=cy+15;
+    svg+=`<line class="wireS" x1="${x}" y1="${prevBot}" x2="${x}" y2="${gTop}"/>`;
+    svg+=glyphV(x,cy,c);
+    svg+=`<text class="vlb" fill="${COL[c.type]}" x="${x+16}" y="${cy+4}">${fmtVal(c)}</text>`;
+    prevBot=gBot;});
+  svg+=`<line class="wireS" x1="${x}" y1="${prevBot}" x2="${x}" y2="${BOT}"/>`;
+  return svg;
+}
+function glyphH(cxp,y,c){const col=COL[c.type];
+  if(c.type==='R')return `<rect class="gly" x="${cxp-15}" y="${y-9}" width="30" height="18" stroke="${col}" stroke-width="2"/>`;
+  if(c.type==='L'){let d=`M${cxp-15},${y}`;for(let k=0;k<3;k++)d+=` a5 5 0 0 1 10 0`;
+    return `<path class="gly" d="${d}" stroke="${col}" stroke-width="2"/>`;}
+  return `<line class="gly" x1="${cxp-4}" y1="${y-11}" x2="${cxp-4}" y2="${y+11}" stroke="${col}" stroke-width="2.4"/>
+          <line class="gly" x1="${cxp+4}" y1="${y-11}" x2="${cxp+4}" y2="${y+11}" stroke="${col}" stroke-width="2.4"/>`;
+}
+function drawSchematic(){
+  const legs=state.legs, n=legs.length;
+  const x0=330, dx=Math.max(110,Math.min(150,(760)/Math.max(n,1)));
+  const lastX=x0+dx*(n-1), railEnd=Math.max(lastX+30,820), Wsvg=railEnd+60;
+  sch.setAttribute('viewBox',`0 0 ${Wsvg} 360`);
+  let s='';
+  // ground + top rail
+  s+=`<line class="wireS" x1="70" y1="${BOT}" x2="${lastX}" y2="${BOT}"/>`;
+  s+=`<line class="wireS" x1="250" y1="${TOP}" x2="${lastX}" y2="${TOP}"/>`;
+  s+=`<text class="lbl" x="${250}" y="${TOP-10}">OUT node</text>`;
+  // source branch (horizontal) : source circle then series comps to node x=250
+  s+=`<circle class="gly" cx="100" cy="210" r="20" stroke="#7e8aa0" stroke-width="2"/>`;
+  s+=`<path class="gly" d="M89 210 q5 -9 11 0 t11 0" stroke="#7e8aa0" stroke-width="2"/>`;
+  s+=`<text class="lbl" x="100" y="258" text-anchor="middle">pickup EMF</text>`;
+  s+=`<line class="wireS" x1="100" y1="${BOT}" x2="100" y2="230"/>`;
+  s+=`<line class="wireS" x1="100" y1="190" x2="100" y2="170"/>`;
+  // horizontal run from (100,170)->(250,170) up to rail; place source comps along x 140..240
+  const sc=state.source; let sx0=135,sx1=240, hy=170;
+  s+=`<line class="wireS" x1="100" y1="170" x2="${sx0-15}" y2="170"/>`;
+  if(sc.length){const sdx=(sx1-sx0)/sc.length;let prev=sx0-15;
+    sc.forEach((c,i)=>{const cxp=sx0+sdx*(i+0.5);
+      s+=`<line class="wireS" x1="${prev}" y1="170" x2="${cxp-15}" y2="170"/>`;
+      s+=glyphH(cxp,170,c);
+      s+=`<text class="vlb" fill="${COL[c.type]}" x="${cxp}" y="155" text-anchor="middle">${fmtVal(c)}</text>`;
+      prev=cxp+15;});
+    s+=`<line class="wireS" x1="${prev}" y1="170" x2="250" y2="170"/>`;
+  } else { s+=`<line class="wireS" x1="${sx0-15}" y1="170" x2="250" y2="170"/>`; }
+  s+=`<line class="wireS" x1="250" y1="170" x2="250" y2="${TOP}"/><circle fill="#4fc3f7" cx="250" cy="${TOP}" r="4"/>`;
+  // legs
+  legs.forEach((lg,i)=>{const x=x0+dx*i;
+    s+=`<line class="wireS" x1="${x}" y1="${TOP}" x2="${x}" y2="${TOP}"/>`;
+    s+=`<circle fill="#4fc3f7" cx="${x}" cy="${TOP}" r="3"/>`;
+    s+=`<text class="lbl" x="${x}" y="${BOT+18}" text-anchor="middle">${lg.name}</text>`;
+    s+=legSVG(lg.comps,x);
+  });
+  // ground symbol at far left of rail
+  const gx=70;
+  s+=`<line class="wireS" x1="${gx}" y1="${BOT}" x2="${gx}" y2="${BOT+12}"/>`;
+  s+=`<line class="wireS" x1="${gx-12}" y1="${BOT+12}" x2="${gx+12}" y2="${BOT+12}"/>`;
+  s+=`<line class="wireS" x1="${gx-8}" y1="${BOT+18}" x2="${gx+8}" y2="${BOT+18}"/>`;
+  s+=`<line class="wireS" x1="${gx-4}" y1="${BOT+24}" x2="${gx+4}" y2="${BOT+24}"/>`;
+  sch.innerHTML=s;
+}
+
+// ---------------- plot ----------------
+const cv=document.getElementById('plot'),ctx=cv.getContext('2d');
+const W=cv.width,Hh=cv.height,mL=58,mR=18,mT=18,mB=46,dbMin=-40,dbMax=10;
+const PX=f=>mL+(Math.log10(f/fmin)/Math.log10(fmax/fmin))*(W-mL-mR);
+const PY=db=>mT+(1-(db-dbMin)/(dbMax-dbMin))*(Hh-mT-mB);
+function grid(){ctx.clearRect(0,0,W,Hh);ctx.fillStyle='#232a34';ctx.fillRect(0,0,W,Hh);
+  ctx.strokeStyle='#2a313c';ctx.fillStyle='#97a0b0';ctx.font='12px sans-serif';ctx.lineWidth=1;
+  [20,50,100,200,500,1000,2000,5000,10000,20000].forEach(f=>{const x=PX(f);
+    ctx.beginPath();ctx.moveTo(x,mT);ctx.lineTo(x,Hh-mB);ctx.stroke();
+    ctx.textAlign='center';ctx.fillText(f>=1000?(f/1000)+'k':f,x,Hh-mB+16);});
+  for(let db=dbMin;db<=dbMax;db+=10){const y=PY(db);ctx.beginPath();ctx.moveTo(mL,y);ctx.lineTo(W-mR,y);ctx.stroke();
+    ctx.textAlign='right';ctx.fillText(db+' dB',mL-8,y+4);}
+  ctx.textAlign='center';ctx.fillStyle='#cbd2dd';ctx.fillText('Frequency (Hz) — logarithmic',W/2,Hh-6);}
+function drawC(c,color,w,dash){ctx.beginPath();ctx.lineWidth=w;ctx.strokeStyle=color;ctx.setLineDash(dash||[]);
+  c.forEach((db,i)=>{const x=PX(fAxis[i]),y=PY(Math.max(dbMin,Math.min(dbMax,db)));i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.stroke();ctx.setLineDash([]);}
+function drawPlot(){const curve=curveNow();grid();
+  if(refCurve)drawC(refCurve,'#6b7686',1.6,[6,5]);
+  drawC(curve,'#ffb347',2.4);
+  let pk=-999,pi=0;curve.forEach((db,i)=>{if(db>pk){pk=db;pi=i;}});const fr=fAxis[pi];
+  ctx.fillStyle='#4fc3f7';ctx.beginPath();ctx.arc(PX(fr),PY(Math.min(dbMax,pk)),4,0,7);ctx.fill();
+  rFreq.textContent=fr>=1000?(fr/1000).toFixed(2)+' kHz':fr.toFixed(0)+' Hz';
+  rPeak.textContent=pk.toFixed(1)+' dB';
+  let cut='–';for(let i=pi;i<curve.length;i++){if(curve[i]<=pk-3){cut=fAxis[i]>=1000?(fAxis[i]/1000).toFixed(2)+' kHz':fAxis[i].toFixed(0)+' Hz';break;}}
+  rCut.textContent=cut;}
+
+function drawAll(){drawSchematic();drawPlot();}
+render();
+setRef();
+</script>
+</body>
+</html>
